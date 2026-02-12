@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebRTC Monitor - Test Page</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      padding: 40px;
+      max-width: 800px;
+      width: 100%;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+    }
+
+    .section {
+      margin-bottom: 30px;
+    }
+
+    .section h2 {
+      color: #667eea;
+      font-size: 18px;
+      margin-bottom: 15px;
+    }
+
+    .video-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    video {
+      width: 100%;
+      background: #000;
+      border-radius: 8px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #5568d3;
+    }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+
+    .btn-secondary:hover {
+      background: #e0e0e0;
+    }
+
+    .btn-danger {
+      background: #D50000;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #b00000;
+    }
+
+    .info-box {
+      background: #f9f9f9;
+      padding: 20px;
+      border-radius: 8px;
+      border-left: 4px solid #667eea;
+    }
+
+    .info-box p {
+      margin-bottom: 10px;
+      line-height: 1.6;
+    }
+
+    .info-box p:last-child {
+      margin-bottom: 0;
+    }
+
+    .status {
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: 6px;
+      display: inline-block;
+      margin-bottom: 10px;
+    }
+
+    .status.active {
+      background: #E8F5E9;
+      color: #2E7D32;
+    }
+
+    .status.inactive {
+      background: #FFEBEE;
+      color: #C62828;
+    }
+
+    code {
+      background: #f5f5f5;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>WebRTC Monitor Test Page</h1>
+    <p class="subtitle">Use this page to test the WebRTC Monitor extension</p>
+
+    <div class="section">
+      <h2>📹 Local Video Stream</h2>
+      <div class="video-container">
+        <video id="localVideo" autoplay muted playsinline></video>
+        <video id="remoteVideo" autoplay playsinline></video>
+      </div>
+      <div class="controls">
+        <button id="startBtn" class="btn-primary">Start Camera</button>
+        <button id="callBtn" class="btn-secondary" disabled>Start Call</button>
+        <button id="hangupBtn" class="btn-danger" disabled>Hang Up</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>📊 Connection Status</h2>
+      <div class="info-box">
+        <div id="status" class="status inactive">Not Connected</div>
+        <p id="statusText">Click "Start Camera" to begin testing the extension.</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>ℹ️ Instructions</h2>
+      <div class="info-box">
+        <p><strong>1.</strong> Make sure the WebRTC Monitor extension is installed and active</p>
+        <p><strong>2.</strong> Click "Start Camera" to access your camera/microphone</p>
+        <p><strong>3.</strong> Click "Start Call" to create a local WebRTC connection</p>
+        <p><strong>4.</strong> Open the extension popup to see real-time stats</p>
+        <p><strong>5.</strong> The extension will monitor connection quality and show notifications if quality degrades</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>🔍 What's Being Monitored</h2>
+      <div class="info-box">
+        <p>• <strong>RTT (Round Trip Time)</strong>: Network latency</p>
+        <p>• <strong>Packet Loss</strong>: Percentage of lost packets</p>
+        <p>• <strong>Jitter</strong>: Variation in packet arrival time</p>
+        <p>• <strong>Bandwidth</strong>: Available throughput</p>
+        <p>• <strong>Frame Stats</strong>: Video encoding/decoding performance</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let localStream;
+    let pc1;
+    let pc2;
+
+    const localVideo = document.getElementById('localVideo');
+    const remoteVideo = document.getElementById('remoteVideo');
+    const startBtn = document.getElementById('startBtn');
+    const callBtn = document.getElementById('callBtn');
+    const hangupBtn = document.getElementById('hangupBtn');
+    const statusDiv = document.getElementById('status');
+    const statusText = document.getElementById('statusText');
+
+    startBtn.addEventListener('click', start);
+    callBtn.addEventListener('click', call);
+    hangupBtn.addEventListener('click', hangup);
+
+    async function start() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true
+        });
+        
+        localVideo.srcObject = stream;
+        localStream = stream;
+        
+        startBtn.disabled = true;
+        callBtn.disabled = false;
+        
+        updateStatus('inactive', 'Camera started. Ready to create connection.');
+      } catch (error) {
+        console.error('Error accessing media devices:', error);
+        updateStatus('inactive', 'Error: ' + error.message);
+      }
+    }
+
+    async function call() {
+      callBtn.disabled = true;
+      hangupBtn.disabled = false;
+
+      updateStatus('active', 'Creating peer connection...');
+
+      const configuration = {
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      };
+
+      pc1 = new RTCPeerConnection(configuration);
+      pc2 = new RTCPeerConnection(configuration);
+
+      pc1.addEventListener('icecandidate', e => onIceCandidate(pc1, e));
+      pc2.addEventListener('icecandidate', e => onIceCandidate(pc2, e));
+      pc2.addEventListener('track', gotRemoteStream);
+
+      localStream.getTracks().forEach(track => pc1.addTrack(track, localStream));
+
+      try {
+        const offer = await pc1.createOffer();
+        await onCreateOfferSuccess(offer);
+        updateStatus('active', 'WebRTC connection established! Check the extension popup for stats.');
+      } catch (error) {
+        console.error('Error creating offer:', error);
+        updateStatus('inactive', 'Error: ' + error.message);
+      }
+    }
+
+    function hangup() {
+      pc1.close();
+      pc2.close();
+      pc1 = null;
+      pc2 = null;
+      
+      hangupBtn.disabled = true;
+      callBtn.disabled = false;
+      
+      updateStatus('inactive', 'Connection closed. Click "Start Call" to reconnect.');
+    }
+
+    function gotRemoteStream(e) {
+      if (remoteVideo.srcObject !== e.streams[0]) {
+        remoteVideo.srcObject = e.streams[0];
+      }
+    }
+
+    async function onCreateOfferSuccess(desc) {
+      await pc1.setLocalDescription(desc);
+      await pc2.setRemoteDescription(desc);
+      const answer = await pc2.createAnswer();
+      await pc2.setLocalDescription(answer);
+      await pc1.setRemoteDescription(answer);
+    }
+
+    async function onIceCandidate(pc, event) {
+      try {
+        if (event.candidate) {
+          await getOtherPc(pc).addIceCandidate(event.candidate);
+        }
+      } catch (error) {
+        console.error('Error adding ICE candidate:', error);
+      }
+    }
+
+    function getOtherPc(pc) {
+      return pc === pc1 ? pc2 : pc1;
+    }
+
+    function updateStatus(type, text) {
+      statusDiv.className = `status ${type}`;
+      statusDiv.textContent = type === 'active' ? 'Connected' : 'Not Connected';
+      statusText.textContent = text;
+    }
+  </script>
+</body>
+</html>

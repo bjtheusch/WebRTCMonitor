@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebRTC Monitor</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>WebRTC Monitor</h1>
+      <div id="status-badge" class="status-badge unknown">Unknown</div>
+    </header>
+
+    <main>
+      <section class="connection-info">
+        <h2>Connection Status</h2>
+        <div id="connection-status" class="status-grid">
+          <div class="status-item">
+            <span class="label">Quality:</span>
+            <span id="quality-status" class="value">--</span>
+          </div>
+          <div class="status-item">
+            <span class="label">RTT:</span>
+            <span id="rtt-value" class="value">--</span>
+          </div>
+          <div class="status-item">
+            <span class="label">Packet Loss:</span>
+            <span id="packet-loss-value" class="value">--</span>
+          </div>
+          <div class="status-item">
+            <span class="label">Jitter:</span>
+            <span id="jitter-value" class="value">--</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="recent-stats">
+        <h2>Recent Activity</h2>
+        <div id="stats-list" class="stats-list">
+          <p class="placeholder">No data available yet</p>
+        </div>
+      </section>
+
+      <section class="actions">
+        <h2>Quick Actions</h2>
+        <div class="button-grid">
+          <button id="check-permissions" class="btn btn-secondary">
+            Check Permissions
+          </button>
+          <button id="clear-cache" class="btn btn-secondary">
+            Clear Cache
+          </button>
+          <button id="test-connection" class="btn btn-secondary">
+            Test API
+          </button>
+          <button id="view-stats" class="btn btn-secondary">
+            View Stats
+          </button>
+        </div>
+      </section>
+
+      <section class="database-info">
+        <h2>Database Info</h2>
+        <div id="db-stats" class="info-grid">
+          <div class="info-item">
+            <span class="label">Total Records:</span>
+            <span id="db-total" class="value">--</span>
+          </div>
+          <div class="info-item">
+            <span class="label">Pending Upload:</span>
+            <span id="db-pending" class="value">--</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <button id="open-options" class="btn btn-link">Settings</button>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
