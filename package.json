@@ -1,0 +1,31 @@
+{
+  "name": "webrtc-monitor",
+  "version": "1.0.0",
+  "description": "Chrome extension for monitoring WebRTC connections and tracking quality metrics",
+  "main": "background.js",
+  "scripts": {
+    "test": "echo \"No tests configured yet\" && exit 0",
+    "build": "echo \"Creating distributable package...\" && npm run package",
+    "package": "node scripts/package.js",
+    "lint": "echo \"Linting not configured\" && exit 0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bjtheusch/WebRTCMonitor.git"
+  },
+  "keywords": [
+    "webrtc",
+    "monitoring",
+    "chrome-extension",
+    "connection-quality",
+    "network-analysis"
+  ],
+  "author": "WebRTC Monitor Contributors",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/bjtheusch/WebRTCMonitor/issues"
+  },
+  "homepage": "https://github.com/bjtheusch/WebRTCMonitor#readme",
+  "devDependencies": {},
+  "dependencies": {}
+}
