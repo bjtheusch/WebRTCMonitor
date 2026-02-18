@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>WebRTC Monitor Test Page</title>
+  <style>body{font-family:system-ui,Segoe UI,Helvetica,Arial;padding:16px}button{padding:8px 12px;margin:6px}</style>
+</head>
+<body>
+  <h1>WebRTC Monitor Test</h1>
+  <p>This page creates two RTCPeerConnection objects (datachannel loopback) and periodically calls getStats.</p>
+  <div>
+    <button id="start">Start Loopback</button>
+    <button id="dump">Dump getStats Now</button>
+  </div>
+  <pre id="log" style="height:300px;overflow:auto;background:#f7f7f7;padding:8px;border:1px solid #ddd"></pre>
+
+<script>
+(function(){
+  const logEl = document.getElementById('log');
+  function log(...args){
+    const txt = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+    console.log('TESTPAGE:', ...args);
+    logEl.textContent += txt + '\n';
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  let pc1 = null;
+  let pc2 = null;
+  let dc = null;
+  let statsTimer = null;
+
+  async function start() {
+    if (pc1) {
+      log('Already started');
+      return;
+    }
+
+    pc1 = new RTCPeerConnection();
+    pc2 = new RTCPeerConnection();
+
+    pc2.ondatachannel = (ev) => {
+      const rc = ev.channel;
+      rc.onmessage = (m) => log('pc2 received msg:', m.data);
+      rc.onopen = () => log('pc2 datachannel open');
+    };
+
+    dc = pc1.createDataChannel('test');
+    dc.onopen = () => log('pc1 datachannel open');
+    dc.onmessage = (m) => log('pc1 received msg:', m.data);
+
+    // ICE candidate exchange
+    pc1.onicecandidate = (e) => { if (e.candidate) pc2.addIceCandidate(e.candidate).catch(err=>log('addIceCandidate pc2 error',err)); };
+    pc2.onicecandidate = (e) => { if (e.candidate) pc1.addIceCandidate(e.candidate).catch(err=>log('addIceCandidate pc1 error',err)); };
+
+    // Create offer/answer
+    try {
+      const offer = await pc1.createOffer();
+      await pc1.setLocalDescription(offer);
+      await pc2.setRemoteDescription(offer);
+      const answer = await pc2.createAnswer();
+      await pc2.setLocalDescription(answer);
+      await pc1.setRemoteDescription(answer);
+      log('Negotiation complete');
+    } catch (e) {
+      log('Negotiation failed', e);
+      return;
+    }
+
+    // Send a test message once open
+    dc.onopen = () => { log('datachannel open, sending hello'); dc.send('hello from pc1'); };
+
+    // Periodic getStats
+    statsTimer = setInterval(async () => {
+      try {
+        const s1 = await pc1.getStats();
+        let count1 = 0; s1.forEach(() => count1++);
+        log('pc1.getStats entries:', count1);
+      } catch (e) { log('pc1.getStats error', e); }
+
+      try {
+        const s2 = await pc2.getStats();
+        let count2 = 0; s2.forEach(() => count2++);
+        log('pc2.getStats entries:', count2);
+      } catch (e) { log('pc2.getStats error', e); }
+    }, 2000);
+  }
+
+  document.getElementById('start').addEventListener('click', start);
+  document.getElementById('dump').addEventListener('click', async () => {
+    if (!pc1) { log('Not started'); return; }
+    try {
+      const s = await pc1.getStats(); let c=0; s.forEach(()=>c++);
+      log('Manual dump pc1 entries:', c);
+    } catch (e) { log('Manual dump error', e); }
+  });
+
+})();
+</script>
+</body>
+</html>

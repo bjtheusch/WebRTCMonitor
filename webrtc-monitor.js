@@ -10,26 +10,34 @@ export class WebRTCMonitor {
   async attachToTab(tabId) {
     try {
       // Attach Chrome debugger to access WebRTC internals
+      console.log('WEBRTCMONITOR: attachToTab starting for', tabId);
       await chrome.debugger.attach({ tabId }, '1.3');
       this.debuggerAttached = true;
 
       // Enable necessary domains
-      await chrome.debugger.sendCommand({ tabId }, 'WebRTC.enable');
+      try {
+        const res = await chrome.debugger.sendCommand({ tabId }, 'WebRTC.enable');
+        console.log('WEBRTCMONITOR: WebRTC.enable returned', res, 'for tab', tabId);
+      } catch (cmdErr) {
+        console.error('WEBRTCMONITOR: WebRTC.enable failed for tab', tabId, cmdErr);
+        // continue; the attach succeeded but enabling WebRTC domain failed
+      }
 
-      console.log(`Debugger attached to tab ${tabId}`);
+      console.log(`WEBRTCMONITOR: Debugger attached to tab ${tabId}`);
     } catch (error) {
-      console.error('Failed to attach debugger:', error);
+      console.error('WEBRTCMONITOR: Failed to attach debugger to tab', tabId, error);
       throw error;
     }
   }
 
   async detachFromTab(tabId) {
     try {
+      console.log('WEBRTCMONITOR: detaching debugger from tab', tabId);
       await chrome.debugger.detach({ tabId });
       this.debuggerAttached = false;
-      console.log(`Debugger detached from tab ${tabId}`);
+      console.log(`WEBRTCMONITOR: Debugger detached from tab ${tabId}`);
     } catch (error) {
-      console.error('Failed to detach debugger:', error);
+      console.error('WEBRTCMONITOR: Failed to detach debugger from tab', tabId, error);
     }
   }
 
@@ -38,7 +46,8 @@ export class WebRTCMonitor {
       // Note: Chrome's debugger API doesn't directly expose WebRTC stats
       // This is a simplified implementation
       // In practice, you'd need to inject a content script to access RTCPeerConnection
-      
+      console.log('WEBRTCMONITOR: getStats called for tab', tabId, 'debuggerAttached=', this.debuggerAttached);
+
       const stats = {
         timestamp: Date.now(),
         tabId,
@@ -47,7 +56,7 @@ export class WebRTCMonitor {
 
       return stats;
     } catch (error) {
-      console.error('Failed to get WebRTC stats:', error);
+      console.error('WEBRTCMONITOR: Failed to get WebRTC stats for tab', tabId, error);
       return null;
     }
   }

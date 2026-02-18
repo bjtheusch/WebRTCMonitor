@@ -19,7 +19,31 @@ function setupEventListeners() {
   document.getElementById('clear-cache').addEventListener('click', clearCache);
   document.getElementById('test-connection').addEventListener('click', testConnection);
   document.getElementById('view-stats').addEventListener('click', viewStats);
+  document.getElementById('dump-stats').addEventListener('click', dumpStatsNow);
+  document.getElementById('debugger-dump').addEventListener('click', debuggerDumpNow);
   document.getElementById('open-options').addEventListener('click', openOptions);
+  document.getElementById('auto-capture').addEventListener('click', toggleAutoCapture);
+}
+
+async function toggleAutoCapture() {
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs && tabs[0];
+    if (!tab || !tab.id) return alert('No active tab');
+
+    // Ask background to toggle auto-capture for this tab
+    const resp = await chrome.runtime.sendMessage({ type: 'toggle-auto-capture', tabId: tab.id });
+    if (resp && resp.success) {
+      const btn = document.getElementById('auto-capture');
+      btn.textContent = resp.enabled ? 'Disable Auto-capture' : 'Enable Auto-capture';
+      btn.className = resp.enabled ? 'btn btn-danger' : 'btn btn-success';
+      alert(resp.enabled ? 'Auto-capture enabled for this tab' : 'Auto-capture disabled for this tab');
+    } else {
+      alert('Auto-capture toggle failed: ' + (resp && resp.error));
+    }
+  } catch (error) {
+    alert('Error toggling auto-capture: ' + error.message);
+  }
 }
 
 async function loadCurrentStatus() {
@@ -38,26 +62,22 @@ async function loadCurrentStatus() {
 function updateStatusDisplay(stat) {
   const statusBadge = document.getElementById('status-badge');
   const qualityStatus = document.getElementById('quality-status');
-  
+  const quality = stat.quality || {};
+  const status = quality.status || 'unknown';
   // Update badge
-  statusBadge.textContent = stat.quality.status;
-  statusBadge.className = `status-badge ${stat.quality.status}`;
-  
+  statusBadge.textContent = status;
+  statusBadge.className = `status-badge ${status}`;
   // Update quality
-  qualityStatus.textContent = stat.quality.status.toUpperCase();
-  qualityStatus.className = `value ${stat.quality.status}`;
-  
+  qualityStatus.textContent = (status && typeof status === 'string') ? status.toUpperCase() : '--';
+  qualityStatus.className = `value ${status}`;
   // Update metrics
-  const metrics = stat.quality.metrics;
-  
-  document.getElementById('rtt-value').textContent = 
-    metrics.rtt !== null ? `${Math.round(metrics.rtt)}ms` : '--';
-  
-  document.getElementById('packet-loss-value').textContent = 
-    metrics.packetLoss !== null ? `${metrics.packetLoss.toFixed(1)}%` : '--';
-  
-  document.getElementById('jitter-value').textContent = 
-    metrics.jitter !== null ? `${Math.round(metrics.jitter)}ms` : '--';
+  const metrics = quality.metrics || {};
+  document.getElementById('rtt-value').textContent =
+    metrics.rtt !== null && metrics.rtt !== undefined ? `${Math.round(metrics.rtt)}ms` : '--';
+  document.getElementById('packet-loss-value').textContent =
+    metrics.packetLoss !== null && metrics.packetLoss !== undefined ? `${metrics.packetLoss.toFixed(1)}%` : '--';
+  document.getElementById('jitter-value').textContent =
+    metrics.jitter !== null && metrics.jitter !== undefined ? `${Math.round(metrics.jitter)}ms` : '--';
 }
 
 async function loadRecentStats() {
@@ -75,20 +95,18 @@ async function loadRecentStats() {
 function displayRecentStats(stats) {
   const statsList = document.getElementById('stats-list');
   
-  if (stats.length === 0) {
+  if (!Array.isArray(stats) || stats.length === 0) {
     statsList.innerHTML = '<p class="placeholder">No data available yet</p>';
     return;
   }
-  
   statsList.innerHTML = stats.slice(0, 5).map(stat => {
-    const time = new Date(stat.timestamp).toLocaleTimeString();
-    const quality = stat.quality.status;
-    const message = stat.quality.message;
-    
+    const time = stat.timestamp ? new Date(stat.timestamp).toLocaleTimeString() : '--';
+    const quality = (stat.quality && stat.quality.status) ? stat.quality.status : 'unknown';
+    const message = (stat.quality && stat.quality.message) ? stat.quality.message : '';
     return `
       <div class="stat-entry">
         <div class="time">${time}</div>
-        <div class="quality ${quality}">${quality.toUpperCase()}: ${message}</div>
+        <div class="quality ${quality}">${(quality && typeof quality === 'string') ? quality.toUpperCase() : '--'}: ${message}</div>
       </div>
     `;
   }).join('');
@@ -112,19 +130,39 @@ async function loadDatabaseStats() {
 
 async function checkPermissions() {
   try {
-    const response = await chrome.runtime.sendMessage({ type: 'check-permissions' });
-    
-    if (response.success) {
-      const { microphone, camera } = response.permissions;
-      
-      alert(`Permissions Status:
-Microphone: ${microphone ? '✓ Granted' : '✗ Not Granted'}
-Camera: ${camera ? '✓ Granted' : '✗ Not Granted'}
-
-${!microphone || !camera ? 'Visit a website and allow permissions when prompted.' : ''}`);
-    } else {
-      alert('Failed to check permissions: ' + response.error);
+    // Query the active tab
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab || !tab.id) {
+      alert('No active tab found.');
+      return;
     }
+    // Listen for the result ONCE
+    let timeoutId;
+    const onMessage = (msg, sender, sendResponse) => {
+      if (msg && msg.type === 'permissions-result' && sender.tab && sender.tab.id === tab.id) {
+        chrome.runtime.onMessage.removeListener(onMessage);
+        clearTimeout(timeoutId);
+        if (msg.error) {
+          alert('Error checking permissions: ' + msg.error);
+          return;
+        }
+        const mic = msg.microphone;
+        const cam = msg.camera;
+        alert(`Permissions Status:\nMicrophone: ${mic === 'granted' ? '✓ Granted' : mic === 'denied' ? '✗ Denied' : 'Prompt'}\nCamera: ${cam === 'granted' ? '✓ Granted' : cam === 'denied' ? '✗ Denied' : 'Prompt'}\n\n${mic !== 'granted' || cam !== 'granted' ? 'Visit a website and allow permissions when prompted.' : ''}`);
+      }
+    };
+    chrome.runtime.onMessage.addListener(onMessage);
+    // Inject permissions-content.js into the page context
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ['permissions-content.js'],
+      world: 'MAIN'
+    });
+    // Timeout in case no response
+    timeoutId = setTimeout(() => {
+      chrome.runtime.onMessage.removeListener(onMessage);
+      alert('Timed out waiting for permission check result.');
+    }, 3000);
   } catch (error) {
     alert('Error checking permissions: ' + error.message);
   }
@@ -180,4 +218,38 @@ function viewStats() {
 
 function openOptions() {
   chrome.runtime.openOptionsPage();
+}
+
+async function dumpStatsNow() {
+  try {
+    // Request background to broadcast dump request to all tabs
+    const resp = await chrome.runtime.sendMessage({ type: 'dump-stats-now' });
+    if (resp && resp.success) {
+      alert('Requested stats dump. Check background/service worker logs for incoming data.');
+    } else {
+      alert('Requested stats dump. Background did not acknowledge.');
+    }
+  } catch (error) {
+    alert('Error requesting stats dump: ' + error.message);
+  }
+}
+
+async function debuggerDumpNow() {
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs && tabs[0];
+    if (!tab || !tab.id) {
+      alert('No active tab found');
+      return;
+    }
+
+    const resp = await chrome.runtime.sendMessage({ type: 'debugger-dump-now', tabId: tab.id });
+    if (resp && resp.success) {
+      alert('Debugger dump completed. Check background/service worker logs for results.');
+    } else {
+      alert('Debugger dump failed: ' + (resp && resp.error));
+    }
+  } catch (error) {
+    alert('Error requesting debugger dump: ' + error.message);
+  }
 }
